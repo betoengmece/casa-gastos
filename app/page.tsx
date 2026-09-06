@@ -13,6 +13,7 @@ const emptyDraft = (person: "Beto" | "Mari", payment: Payment): Draft => ({ desc
 const parseAmount = (value: string) => Number(value.replace(/\./g, "").replace(",", "."));
 const formatDay = (date: string) => new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(`${date}T12:00:00`)).replace(".", "");
 const formatMoment = (date: string) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(date));
+const formatMonth = (month: string) => new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "America/Sao_Paulo" }).format(new Date(`${month}-15T12:00:00`));
 
 function personShare(expense: Expense, person: "Beto" | "Mari") {
   if (expense.person === person) return expense.amount;
@@ -32,6 +33,7 @@ export default function Home() {
   const [selected, setSelected] = useState<Expense | null>(null);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [showTrash, setShowTrash] = useState(false);
+  const [reportMonth, setReportMonth] = useState(() => today().slice(0, 7));
   const [toast, setToast] = useState("");
   const [syncing, setSyncing] = useState(false);
   const syncLock = useRef(false);
@@ -91,11 +93,24 @@ export default function Home() {
   const active = useMemo(() => expenses.filter((e) => !e.deletedAt).sort((a, b) => b.spentAt.localeCompare(a.spentAt) || b.createdAt.localeCompare(a.createdAt)), [expenses]);
   const trashed = useMemo(() => expenses.filter((e) => e.deletedAt), [expenses]);
   const monthKey = today().slice(0, 7);
-  const monthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "America/Sao_Paulo" }).format(new Date(`${monthKey}-15T12:00:00`));
+  const monthLabel = formatMonth(monthKey);
   const month = active.filter((e) => e.spentAt.startsWith(monthKey));
   const total = month.reduce((sum, e) => sum + e.amount, 0);
   const beto = month.reduce((sum, e) => sum + personShare(e, "Beto"), 0);
   const mari = month.reduce((sum, e) => sum + personShare(e, "Mari"), 0);
+  const reportExpenses = active.filter((e) => e.spentAt.startsWith(reportMonth));
+  const reportTotal = reportExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const reportBeto = reportExpenses.reduce((sum, e) => sum + personShare(e, "Beto"), 0);
+  const reportMari = reportExpenses.reduce((sum, e) => sum + personShare(e, "Mari"), 0);
+  const reportMonths = useMemo(() => {
+    const values = new Set(active.map((e) => e.spentAt.slice(0, 7)));
+    const cursor = new Date(`${monthKey}-15T12:00:00`);
+    for (let index = 0; index < 12; index += 1) {
+      values.add(cursor.toISOString().slice(0, 7));
+      cursor.setMonth(cursor.getMonth() - 1);
+    }
+    return [...values].sort((a, b) => b.localeCompare(a));
+  }, [active, monthKey]);
   const pending = expenses.filter((e) => e.syncStatus === "pending").length;
 
   const recentPayment = (person: Person): Payment => {
@@ -179,9 +194,9 @@ export default function Home() {
         <button className="profile" onClick={() => choosePerson(devicePerson === "Beto" ? "Mari" : "Beto")} aria-label="Trocar pessoa"><span>{devicePerson === "Mari" ? "M" : "B"}</span><span className="online-dot" /></button>
       </header>
 
-      {tab === "home" && <HomeView total={total} beto={beto} mari={mari} expenses={active.slice(0, 4)} onSelect={setSelected} onHistory={() => setTab("history")} />}
+      {tab === "home" && <HomeView total={total} beto={beto} mari={mari} expenses={month} onSelect={setSelected} onHistory={() => setTab("history")} />}
       {tab === "history" && <HistoryView expenses={showTrash ? trashed : active} trash={showTrash} onToggleTrash={() => setShowTrash(!showTrash)} onSelect={setSelected} onRestore={restoreExpense} />}
-      {tab === "reports" && <ReportsView expenses={month} total={total} beto={beto} mari={mari} categories={categories} monthLabel={monthLabel} />}
+      {tab === "reports" && <ReportsView expenses={reportExpenses} total={reportTotal} beto={reportBeto} mari={reportMari} categories={categories} month={reportMonth} months={reportMonths} onMonth={setReportMonth} onSelect={setSelected} />}
       {tab === "settings" && <SettingsView person={devicePerson || "Beto"} categories={categories} onPerson={choosePerson} onAddCategory={addCategory} auditCount={audit.length} />}
 
       <button className="fab" onClick={openNew} aria-label="Adicionar despesa">＋</button>
@@ -208,9 +223,9 @@ function Setup({ onChoose }: { onChoose: (person: "Beto" | "Mari") => void }) {
 
 function HomeView({ total, beto, mari, expenses, onSelect, onHistory }: { total: number; beto: number; mari: number; expenses: Expense[]; onSelect: (e: Expense) => void; onHistory: () => void }) {
   return <>
-    <section className="hero-card"><div className="hero-label"><span>Gasto no mês</span><span>Meta: R$ 6.000</span></div><div className="hero-amount">{money(total)}</div><div className="hero-foot"><span><i className="trend">↘</i> Acompanhe o ritmo do casal</span><span>{Math.round(total / 60)}% da meta</span></div><div className="progress"><span style={{ width: `${Math.min(100, total / 60)}%` }} /></div></section>
+    <section className="hero-card"><div className="hero-label"><span>Gasto no mês</span><span>Meta: R$ 18.000</span></div><div className="hero-amount">{money(total)}</div><div className="hero-foot"><span><i className="trend">↘</i> Acompanhe o ritmo do casal</span><span>{Math.round(total / 180)}% da meta</span></div><div className="progress"><span style={{ width: `${Math.min(100, total / 180)}%` }} /></div></section>
     <section className="split-grid"><PersonCard name="Beto" value={beto} total={total} /><PersonCard name="Mari" value={mari} total={total} /></section>
-    <section className="activity"><div className="section-title"><div><span>Últimos lançamentos</span><small>Toque para ver detalhes e auditoria</small></div><button onClick={onHistory}>Ver todos</button></div><ExpenseList expenses={expenses} onSelect={onSelect} /></section>
+    <section className="activity"><div className="section-title"><div><span>Lançamentos do mês</span><small>Role a lista e toque para ver detalhes</small></div><button onClick={onHistory}>Histórico</button></div><ExpenseList expenses={expenses} onSelect={onSelect} /></section>
   </>;
 }
 
@@ -225,9 +240,11 @@ function HistoryView({ expenses, trash, onToggleTrash, onSelect, onRestore }: { 
   return <section className="page-section"><div className="page-heading"><div><small>LANÇAMENTOS</small><h1>{trash ? "Lixeira" : "Histórico"}</h1></div><button className={trash ? "selected-chip" : ""} onClick={onToggleTrash}>{trash ? "Voltar" : `Lixeira`}</button></div><label className="search">⌕<input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar descrição ou categoria" /></label>{trash ? <div className="trash-list">{shown.map((e) => <article key={e.id}><div><strong>{e.description}</strong><small>{money(e.amount)} · excluída {e.deletedAt ? formatMoment(e.deletedAt) : ""}</small></div><button onClick={() => onRestore(e)}>Restaurar</button></article>)}{!shown.length && <div className="empty stand">A lixeira está vazia.</div>}</div> : <ExpenseList expenses={shown} onSelect={onSelect} />}</section>;
 }
 
-function ReportsView({ expenses, total, beto, mari, categories, monthLabel }: { expenses: Expense[]; total: number; beto: number; mari: number; categories: string[]; monthLabel: string }) {
+function ReportsView({ expenses, total, beto, mari, categories, month, months, onMonth, onSelect }: { expenses: Expense[]; total: number; beto: number; mari: number; categories: string[]; month: string; months: string[]; onMonth: (month: string) => void; onSelect: (expense: Expense) => void }) {
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const grouped = categories.map((category) => ({ category, value: expenses.filter((e) => e.category === category).reduce((s, e) => s + e.amount, 0) })).filter((x) => x.value).sort((a, b) => b.value - a.value);
-  return <section className="page-section"><div className="page-heading"><div><small>{monthLabel.toUpperCase()}</small><h1>Para onde foi?</h1></div><button className="selected-chip">Este mês⌄</button></div><div className="report-total"><small>Total do casal</small><strong>{money(total)}</strong><div><span><i className="beto-dot" />Beto {money(beto)}</span><span><i className="mari-dot" />Mari {money(mari)}</span></div></div><div className="bars"><h2>Por categoria</h2>{grouped.map((row) => <div className="bar-row" key={row.category}><span className="bar-icon">{categoryEmoji[row.category] || "•"}</span><div><label><span>{row.category}</span><strong>{money(row.value)}</strong></label><i><b style={{ width: `${total ? row.value / total * 100 : 0}%` }} /></i></div></div>)}</div><div className="report-note">Despesas marcadas para Beto + Mari entram pela metade no total individual de cada um e uma única vez no consolidado.</div></section>;
+  const categoryExpenses = selectedCategory ? expenses.filter((e) => e.category === selectedCategory) : [];
+  return <section className="page-section"><div className="page-heading"><div><small>{formatMonth(month).toUpperCase()}</small><h1>Para onde foi?</h1></div><label className="month-select"><span className="sr-only">Mês do relatório</span><select aria-label="Mês do relatório" value={month} onChange={(event) => { onMonth(event.target.value); setSelectedCategory(null); }}>{months.map((value) => <option value={value} key={value}>{value === today().slice(0, 7) ? "Este mês" : formatMonth(value)}</option>)}</select></label></div><div className="report-total"><small>Total do casal</small><strong>{money(total)}</strong><div><span><i className="beto-dot" />Beto {money(beto)}</span><span><i className="mari-dot" />Mari {money(mari)}</span></div></div><div className="bars"><h2>Por categoria</h2>{grouped.map((row) => <button className={`bar-row ${selectedCategory === row.category ? "open" : ""}`} key={row.category} onClick={() => setSelectedCategory(selectedCategory === row.category ? null : row.category)}><span className="bar-icon">{categoryEmoji[row.category] || "•"}</span><span className="bar-body"><span className="bar-label"><span>{row.category}</span><strong>{money(row.value)} <em>⌄</em></strong></span><i><b style={{ width: `${total ? row.value / total * 100 : 0}%` }} /></i></span></button>)}{!grouped.length && <div className="empty">Nenhum lançamento neste mês.</div>}</div>{selectedCategory && <div className="category-detail"><div className="section-title"><div><span>{categoryEmoji[selectedCategory] || "•"} {selectedCategory}</span><small>{categoryExpenses.length} lançamento{categoryExpenses.length === 1 ? "" : "s"}</small></div><button onClick={() => setSelectedCategory(null)}>Fechar</button></div><ExpenseList expenses={categoryExpenses} onSelect={onSelect} /></div>}<div className="report-note">Despesas marcadas para Beto + Mari entram pela metade no total individual de cada um e uma única vez no consolidado.</div></section>;
 }
 
 function SettingsView({ person, categories, onPerson, onAddCategory, auditCount }: { person: "Beto" | "Mari"; categories: string[]; onPerson: (p: "Beto" | "Mari") => void; onAddCategory: () => void; auditCount: number }) {
