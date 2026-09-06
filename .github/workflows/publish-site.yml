@@ -1,0 +1,23 @@
+name: Publicar site
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Enviar versão para a hospedagem
+        env:
+          SITES_PUSH_TOKEN: ${{ secrets.SITES_PUSH_TOKEN }}
+        run: |
+          git remote add sites "https://git.chatgpt-team.site/dd6f71bc-c1dc-47c2-87d2-9341aee9a12d/appgprj_6a9d6cb068088191ab4690528c708bf8.git"
+          git -c http.extraHeader="Authorization: Bearer ${SITES_PUSH_TOKEN}" push sites HEAD:main --force
