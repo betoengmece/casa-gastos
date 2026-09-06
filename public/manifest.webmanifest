@@ -1,0 +1,11 @@
+{
+  "name": "Casa — Gastos de Beto e Mari",
+  "short_name": "Casa",
+  "description": "Controle compartilhado de gastos do casal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f5ef",
+  "theme_color": "#17271f",
+  "lang": "pt-BR",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
