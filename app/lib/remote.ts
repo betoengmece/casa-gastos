@@ -1,15 +1,27 @@
 import type { AuditEntry, Expense } from "./model";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-const householdToken = process.env.NEXT_PUBLIC_HOUSEHOLD_TOKEN;
 const SESSION_KEY = "casa-supabase-session";
 
 type Session = { access_token: string; refresh_token: string; expires_at?: number };
+type RemoteConfig = { url: string; key: string; householdToken: string };
 
-export const remoteEnabled = Boolean(url && key && householdToken);
+export const remoteEnabled = true;
+let configPromise: Promise<RemoteConfig> | null = null;
+
+function config(): Promise<RemoteConfig> {
+  if (!configPromise) {
+    configPromise = fetch("/api/config", { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) throw new Error("Sincronização não configurada");
+      const value = await response.json() as RemoteConfig;
+      if (!value.url || !value.key || !value.householdToken) throw new Error("Sincronização não configurada");
+      return { ...value, url: value.url.replace(/\/$/, "") };
+    });
+  }
+  return configPromise;
+}
 
 async function session(): Promise<Session> {
+  const { url, key } = await config();
   const saved = localStorage.getItem(SESSION_KEY);
   if (saved) {
     const current = JSON.parse(saved) as Session;
@@ -23,14 +35,16 @@ async function session(): Promise<Session> {
 }
 
 async function request(path: string, init: RequestInit = {}) {
+  const { url, key } = await config();
   const auth = await session();
-  return fetch(`${url}${path}`, { ...init, headers: { apikey: key!, Authorization: `Bearer ${auth.access_token}`, "Content-Type": "application/json", ...init.headers } });
+  return fetch(`${url}${path}`, { ...init, headers: { apikey: key, Authorization: `Bearer ${auth.access_token}`, "Content-Type": "application/json", ...init.headers } });
 }
 
 const toRemote = (e: Expense) => ({ id: e.id, description: e.description, amount_cents: Math.round(e.amount * 100), spent_at: e.spentAt, category: e.category, person: e.person, author: e.author, payment: e.payment, note: e.note, installment: e.installment, installment_count: e.installmentCount, series_id: e.seriesId || null, version: e.version, created_at: e.createdAt, updated_at: e.updatedAt, deleted_at: e.deletedAt || null });
 const fromRemote = (e: Record<string, unknown>): Expense => ({ id: String(e.id), description: String(e.description), amount: Number(e.amount_cents) / 100, spentAt: String(e.spent_at), category: String(e.category), person: e.person as Expense["person"], author: e.author as Expense["author"], payment: e.payment as Expense["payment"], note: String(e.note || ""), installment: Number(e.installment), installmentCount: Number(e.installment_count), seriesId: e.series_id ? String(e.series_id) : undefined, version: Number(e.version), createdAt: String(e.created_at), updatedAt: String(e.updated_at), deletedAt: e.deleted_at ? String(e.deleted_at) : undefined, syncStatus: "synced" });
 
 export async function connectDevice(person: "Beto" | "Mari") {
+  const { householdToken } = await config();
   const response = await request("/rest/v1/rpc/bootstrap_household", { method: "POST", body: JSON.stringify({ p_token: householdToken, p_person: person }) });
   if (!response.ok) throw new Error(await response.text());
 }
