@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AuditEntry, categoryEmoji, defaultCategories, Expense, money, Payment, Person, seedExpenses, uid } from "./lib/model";
+import { AuditEntry, categoryEmoji, defaultCategories, Expense, money, Payment, Person, uid } from "./lib/model";
 import { localDB } from "./lib/local-db";
 import { connectDevice, pullRemote, pushRemote, remoteEnabled } from "./lib/remote";
 
@@ -46,7 +46,7 @@ export default function Home() {
       const logs = await localDB.loadAudit();
       setDevicePerson(savedPerson);
       if (savedCategories) setCategories(JSON.parse(savedCategories));
-      setExpenses(rows.length ? rows : seedExpenses);
+      setExpenses(rows);
       setAudit(logs);
       setLoaded(true);
     };
